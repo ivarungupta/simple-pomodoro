@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Offline Pomodoro</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #0b0b0d;
+      color: #f3f3f5;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+    .app {
+      width: min(640px, 92vw);
+      padding: 28px 24px;
+      border: 1px solid #1c1c22;
+      border-radius: 18px;
+      background: #0f0f14;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .mode {
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #b9b9c7;
+    }
+    .pill {
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #23232c;
+      color: #cfcfe0;
+      background: #12121a;
+      white-space: nowrap;
+    }
+    .timer {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(64px, 10vw, 96px);
+      line-height: 1.05;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin: 22px 0 18px;
+    }
+    .sub {
+      text-align: center;
+      color: #a7a7b6;
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+    .dots {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 999px;
+      border: 1px solid #2a2a35;
+      background: transparent;
+      opacity: 0.9;
+    }
+    .dot.active { background: #f3f3f5; border-color: #f3f3f5; }
+    .dot.done { background: #6b6b7a; border-color: #6b6b7a; opacity: 0.8; }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    button {
+      appearance: none;
+      border: 1px solid #2a2a35;
+      background: #14141d;
+      color: #f3f3f5;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      min-width: 110px;
+    }
+    button:hover { border-color: #3a3a48; }
+    button:active { transform: translateY(1px); }
+    button.primary {
+      background: #f3f3f5;
+      color: #0b0b0d;
+      border-color: #f3f3f5;
+      font-weight: 700;
+    }
+    button.ghost { background: transparent; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 12px;
+      border-top: 1px solid #1c1c22;
+      padding-top: 14px;
+    }
+    .options {
+      display: grid;
+      gap: 10px;
+    }
+    label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #c9c9d6;
+      font-size: 14px;
+      user-select: none;
+    }
+    input[type="checkbox"]{
+      width: 18px; height: 18px;
+      accent-color: #f3f3f5;
+    }
+    .hint {
+      color: #8f8fa0;
+      font-size: 12px;
+      line-height: 1.35;
+      margin-top: 6px;
+      text-align: center;
+    }
+    .kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      padding: 2px 6px;
+      border: 1px solid #2a2a35;
+      border-radius: 6px;
+      background: #111118;
+      color: #d7d7e5;
+    }
+    .panel {
+      border: 1px solid #1c1c22;
+      border-radius: 14px;
+      padding: 12px 12px;
+      background: #0c0c12;
+    }
+    .panel h3{
+      margin: 0 0 10px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #b9b9c7;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      border: 1px solid #1c1c22;
+      border-radius: 12px;
+      padding: 10px;
+      background: #0f0f14;
+    }
+    .stat .k { color: #a7a7b6; font-size: 12px; }
+    .stat .v { font-variant-numeric: tabular-nums; font-size: 18px; margin-top: 4px; }
+    .miniBtns { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .miniBtns button { min-width: 140px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="mode" id="modeText">Work</div>
+      <div class="pill" id="pillText">Session 1 / 4</div>
+    </div>
+
+    <div class="timer" id="timerText">25:00</div>
+    <div class="sub" id="subText">Focus for 25 minutes.</div>
+
+    <div class="dots" id="dots"></div>
+
+    <div class="controls">
+      <button class="primary" id="playPauseBtn">Play</button>
+      <button class="ghost" id="skipBtn">Skip</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+
+    <div class="grid">
+      <div class="options">
+        <label>
+          <input type="checkbox" id="autoSkipShort" />
+          Auto-skip 5 min breaks
+        </label>
+        <label>
+          <input type="checkbox" id="autoSkipLong" />
+          Auto-skip 30 min break
+        </label>
+        <div class="hint">
+          Shortcuts: <span class="kbd">Space</span> Play/Pause • <span class="kbd">S</span> Skip • <span class="kbd">R</span> Reset
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Insights</h3>
+        <div class="stats">
+          <div class="stat"><div class="k">Focused time (today)</div><div class="v" id="focusToday">0m</div></div>
+          <div class="stat"><div class="k">Completed work sessions (today)</div><div class="v" id="workDoneToday">0</div></div>
+          <div class="stat"><div class="k">Work skips (today)</div><div class="v" id="workSkipsToday">0</div></div>
+          <div class="stat"><div class="k">Play/Pause taps (today)</div><div class="v" id="playPauseToday">0</div></div>
+          <div class="stat"><div class="k">Total focused time (all)</div><div class="v" id="focusAll">0m</div></div>
+          <div class="stat"><div class="k">Total work skips (all)</div><div class="v" id="workSkipsAll">0</div></div>
+        </div>
+        <div class="miniBtns">
+          <button id="exportBtn">Export logs (JSON)</button>
+          <button class="ghost" id="clearBtn">Clear logs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DURATIONS = { WORK: 25 * 60, SHORT: 5 * 60, LONG: 30 * 60 };
+    const Mode = { WORK: "WORK", SHORT: "SHORT_BREAK", LONG: "LONG_BREAK" };
+
+    const STORE_KEY = "pomodoro_analytics_v1";
+
+    function todayKey(d = new Date()){
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function loadStore(){
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (!raw) return { events: [], countersByDay: {} };
+        const obj = JSON.parse(raw);
+        if (!obj.events) obj.events = [];
+        if (!obj.countersByDay) obj.countersByDay = {};
+        return obj;
+      } catch {
+        return { events: [], countersByDay: {} };
+      }
+    }
+
+    function saveStore(store){
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    }
+
+    function ensureDay(store, day){
+      if (!store.countersByDay[day]){
+        store.countersByDay[day] = {
+          focusedSeconds: 0,
+          workCompleted: 0,
+          playPauseTaps: 0,
+          skips: 0,
+          workSkips: 0,
+          breakSkips: 0
+        };
+      }
+      return store.countersByDay[day];
+    }
+
+    function logEvent(type, data = {}){
+      const store = loadStore();
+      store.events.push({
+        t: Date.now(),
+        type,
+        ...data
+      });
+      if (store.events.length > 5000) store.events.splice(0, store.events.length - 5000);
+      saveStore(store);
+    }
+
+    function incCounter(field, amount = 1){
+      const store = loadStore();
+      const day = todayKey();
+      const c = ensureDay(store, day);
+      c[field] = (c[field] || 0) + amount;
+      saveStore(store);
+    }
+
+    function addFocusedSeconds(sec){
+      if (sec <= 0) return;
+      const store = loadStore();
+      const day = todayKey();
+      const c = ensureDay(store, day);
+      c.focusedSeconds += sec;
+      saveStore(store);
+    }
+
+    function sumAll(field){
+      const store = loadStore();
+      let total = 0;
+      for (const d in store.countersByDay){
+        total += (store.countersByDay[d][field] || 0);
+      }
+      return total;
+    }
+
+    function formatMinutesFromSeconds(sec){
+      const m = Math.round(sec / 60);
+      if (m < 60) return `${m}m`;
+      const h = Math.floor(m / 60);
+      const rm = m % 60;
+      return rm ? `${h}h ${rm}m` : `${h}h`;
+    }
+
+    function beep(){
+      try{
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.value = 880;
+        g.gain.value = 0.05;
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start();
+        setTimeout(() => { o.stop(); ctx.close(); }, 160);
+      } catch {}
+    }
+
+    let mode = Mode.WORK;
+    let session = 1;
+    let remaining = DURATIONS.WORK;
+
+    let running = false;
+    let raf = null;
+    let lastTick = 0;
+    let acc = 0;
+
+    let segmentStartedAt = null;
+    let lastResumeAt = null;
+    let focusedAccSecThisSegment = 0;
+
+    const modeText = document.getElementById("modeText");
+    const pillText = document.getElementById("pillText");
+    const timerText = document.getElementById("timerText");
+    const subText = document.getElementById("subText");
+
+    const playPauseBtn = document.getElementById("playPauseBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const skipBtn = document.getElementById("skipBtn");
+
+    const autoSkipShort = document.getElementById("autoSkipShort");
+    const autoSkipLong = document.getElementById("autoSkipLong");
+
+    const dotsEl = document.getElementById("dots");
+
+    const focusTodayEl = document.getElementById("focusToday");
+    const workDoneTodayEl = document.getElementById("workDoneToday");
+    const workSkipsTodayEl = document.getElementById("workSkipsToday");
+    const playPauseTodayEl = document.getElementById("playPauseToday");
+    const focusAllEl = document.getElementById("focusAll");
+    const workSkipsAllEl = document.getElementById("workSkipsAll");
+
+    const exportBtn = document.getElementById("exportBtn");
+    const clearBtn = document.getElementById("clearBtn");
+
+    function pad2(n){ return String(n).padStart(2, "0"); }
+    function formatTime(sec){
+      sec = Math.max(0, sec|0);
+      const m = (sec / 60) | 0;
+      const s = sec % 60;
+      return `${pad2(m)}:${pad2(s)}`;
+    }
+
+    function renderDots(){
+      dotsEl.innerHTML = "";
+      for(let i=1;i<=4;i++){
+        const d = document.createElement("div");
+        d.className = "dot";
+        if (i < session) d.classList.add("done");
+        if (i === session && mode === Mode.WORK) d.classList.add("active");
+        dotsEl.appendChild(d);
+      }
+    }
+
+    function setTexts(){
+      if (mode === Mode.WORK){
+        modeText.textContent = "Work";
+        pillText.textContent = `Session ${session} / 4`;
+        subText.textContent = "Focus for 25 minutes.";
+      } else if (mode === Mode.SHORT){
+        modeText.textContent = "Break";
+        pillText.textContent = `Break (5 min)`;
+        subText.textContent = "Short break. Breathe.";
+      } else {
+        modeText.textContent = "Long Break";
+        pillText.textContent = `Break (30 min)`;
+        subText.textContent = "Long break. Reset.";
+      }
+      timerText.textContent = formatTime(remaining);
+      document.title = `${timerText.textContent} • ${modeText.textContent}`;
+      renderDots();
+      renderInsights();
+    }
+
+    function startSegment(){
+      segmentStartedAt = Date.now();
+      focusedAccSecThisSegment = 0;
+      logEvent("segment_start", { mode, session, plannedSeconds: remaining });
+    }
+
+    function endSegment(reason){
+      if (mode === Mode.WORK){
+        addFocusedSeconds(focusedAccSecThisSegment);
+      }
+      logEvent("segment_end", {
+        mode, session,
+        reason,
+        focusedSecondsThisSegment: mode === Mode.WORK ? focusedAccSecThisSegment : 0
+      });
+
+      segmentStartedAt = null;
+      focusedAccSecThisSegment = 0;
+      lastResumeAt = null;
+      renderInsights();
+    }
+
+    function setRunning(next){
+      if (running === next) return;
+
+      incCounter("playPauseTaps", 1);
+      logEvent(next ? "play" : "pause", { mode, session, remaining });
+
+      running = next;
+      playPauseBtn.textContent = running ? "Pause" : "Play";
+
+      if (running) {
+        if (!segmentStartedAt) startSegment();
+        lastResumeAt = Date.now();
+        startLoop();
+      } else {
+        if (mode === Mode.WORK && lastResumeAt){
+          const dtSec = Math.max(0, Math.floor((Date.now() - lastResumeAt)/1000));
+          focusedAccSecThisSegment += dtSec;
+        }
+        lastResumeAt = null;
+        stopLoop();
+      }
+      renderInsights();
+    }
+
+    function stopLoop(){
+      if (raf) cancelAnimationFrame(raf);
+      raf = null;
+      lastTick = 0;
+      acc = 0;
+    }
+
+    function startLoop(){
+      if (raf) return;
+      raf = requestAnimationFrame(loop);
+    }
+
+    function loop(ts){
+      if (!running) return;
+      if (!lastTick) lastTick = ts;
+      const dt = ts - lastTick;
+      lastTick = ts;
+      acc += dt;
+
+      while (acc >= 1000){
+        acc -= 1000;
+        remaining -= 1;
+
+        if (mode === Mode.WORK){
+          focusedAccSecThisSegment += 1;
+        }
+
+        if (remaining <= 0){
+          remaining = 0;
+          setTexts();
+          onTimerEnd();
+          return;
+        }
+      }
+
+      timerText.textContent = formatTime(remaining);
+      document.title = `${timerText.textContent} • ${modeText.textContent}`;
+      raf = requestAnimationFrame(loop);
+    }
+
+    function goTo(nextMode){
+      mode = nextMode;
+      if (mode === Mode.WORK) remaining = DURATIONS.WORK;
+      if (mode === Mode.SHORT) remaining = DURATIONS.SHORT;
+      if (mode === Mode.LONG) remaining = DURATIONS.LONG;
+
+      segmentStartedAt = null;
+      focusedAccSecThisSegment = 0;
+      lastResumeAt = null;
+
+      setRunning(false);
+      setTexts();
+    }
+
+    function onTimerEnd(){
+      beep();
+      endSegment("completed");
+
+      if (mode === Mode.WORK){
+        incCounter("workCompleted", 1);
+
+        if (session < 4){
+          goTo(Mode.SHORT);
+          if (autoSkipShort.checked){
+            incCounter("breakSkips", 1);
+            logEvent("auto_skip_break", { which: "short" });
+            session += 1;
+            goTo(Mode.WORK);
+          }
+        } else {
+          goTo(Mode.LONG);
+          if (autoSkipLong.checked){
+            incCounter("breakSkips", 1);
+            logEvent("auto_skip_break", { which: "long" });
+            session = 1;
+            goTo(Mode.WORK);
+          }
+        }
+      } else if (mode === Mode.SHORT){
+        session += 1;
+        goTo(Mode.WORK);
+      } else {
+        session = 1;
+        goTo(Mode.WORK);
+      }
+    }
+
+    function resetAll(){
+      if (segmentStartedAt){
+        endSegment("reset");
+      }
+      session = 1;
+      mode = Mode.WORK;
+      remaining = DURATIONS.WORK;
+      setRunning(false);
+      setTexts();
+      logEvent("reset", {});
+    }
+
+    function skipCurrent(){
+      beep();
+      incCounter("skips", 1);
+      logEvent("skip", { mode, session, remaining });
+
+      if (mode === Mode.WORK) incCounter("workSkips", 1);
+      else incCounter("breakSkips", 1);
+
+      if (segmentStartedAt){
+        endSegment("skipped");
+      }
+
+      if (mode === Mode.WORK){
+        if (session < 4){
+          goTo(Mode.SHORT);
+          if (autoSkipShort.checked){
+            session += 1;
+            goTo(Mode.WORK);
+          }
+        } else {
+          goTo(Mode.LONG);
+          if (autoSkipLong.checked){
+            session = 1;
+            goTo(Mode.WORK);
+          }
+        }
+      } else if (mode === Mode.SHORT){
+        session += 1;
+        goTo(Mode.WORK);
+      } else {
+        session = 1;
+        goTo(Mode.WORK);
+      }
+    }
+
+    function renderInsights(){
+      const store = loadStore();
+      const day = todayKey();
+      const c = store.countersByDay[day] || {
+        focusedSeconds: 0, workCompleted: 0, playPauseTaps: 0, skips: 0, workSkips: 0, breakSkips: 0
+      };
+
+      focusTodayEl.textContent = formatMinutesFromSeconds(c.focusedSeconds || 0);
+      workDoneTodayEl.textContent = String(c.workCompleted || 0);
+      workSkipsTodayEl.textContent = String(c.workSkips || 0);
+      playPauseTodayEl.textContent = String(c.playPauseTaps || 0);
+
+      focusAllEl.textContent = formatMinutesFromSeconds(sumAll("focusedSeconds"));
+      workSkipsAllEl.textContent = String(sumAll("workSkips"));
+    }
+
+    exportBtn.addEventListener("click", () => {
+      const store = loadStore();
+      const blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pomodoro-logs-${todayKey()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    clearBtn.addEventListener("click", () => {
+      localStorage.removeItem(STORE_KEY);
+      renderInsights();
+    });
+
+    playPauseBtn.addEventListener("click", () => setRunning(!running));
+    resetBtn.addEventListener("click", resetAll);
+    skipBtn.addEventListener("click", skipCurrent);
+
+    window.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+      if (e.code === "Space") { e.preventDefault(); setRunning(!running); }
+      else if (e.key.toLowerCase() === "s") { skipCurrent(); }
+      else if (e.key.toLowerCase() === "r") { resetAll(); }
+    });
+
+    setTexts();
+    renderInsights();
+  </script>
+</body>
+</html>
